@@ -8,8 +8,8 @@ use DreamFactory\Core\Services\ServiceType;
 use DreamFactory\Core\SqlAnywhere\Database\Connectors\SqlAnywhereConnector;
 use DreamFactory\Core\SqlAnywhere\Database\Schema\SqlAnywhereSchema;
 use DreamFactory\Core\SqlAnywhere\Database\SqlAnywhereConnection;
+use DreamFactory\Core\SqlAnywhere\Models\SqlAnywhereDbConfig;
 use DreamFactory\Core\SqlAnywhere\Services\SqlAnywhere;
-use DreamFactory\Core\SqlDb\Models\SqlDbConfig;
 use Illuminate\Database\DatabaseManager;
 
 class ServiceProvider extends \Illuminate\Support\ServiceProvider
@@ -33,7 +33,7 @@ class ServiceProvider extends \Illuminate\Support\ServiceProvider
                     'label'          => 'SAP SQL Anywhere',
                     'description'    => 'Database service supporting SAP SQL Anywhere connections.',
                     'group'          => ServiceTypeGroups::DATABASE,
-                    'config_handler' => SqlDbConfig::class,
+                    'config_handler' => SqlAnywhereDbConfig::class,
                     'factory'        => function ($config){
                         return new SqlAnywhere($config);
                     },

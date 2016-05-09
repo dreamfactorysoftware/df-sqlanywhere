@@ -1,0 +1,45 @@
+{
+  "name":        "dreamfactory/df-sqlanywhere",
+  "description": "The DreamFactory(tm) SQL Anywhere DB Service.",
+  "keywords":    [
+    "dreamfactory",
+    "dsp",
+    "rest",
+    "sap",
+    "sql",
+    "database",
+    "db"
+  ],
+  "homepage":    "https://www.dreamfactory.com/",
+  "license":     "Apache-2.0",
+  "authors":     [
+    {
+      "name":  "Arif Islam",
+      "email": "arifislam@dreamfactory.com"
+    },
+    {
+      "name":  "Lee Hicks",
+      "email": "leehicks@dreamfactory.com"
+    }
+  ],
+  "support":     {
+    "email":  "support@dreamfactory.com",
+    "source": "https://github.com/dreamfactorysoftware/df-sqlanywhere",
+    "issues": "https://github.com/dreamfactorysoftware/df-sqlanywhere/issues",
+    "wiki":   "https://wiki.dreamfactory.com"
+  },
+  "require":     {
+    "dreamfactory/php-utils": "1.1.*",
+    "dreamfactory/df-core":   "~0.2.8"
+  },
+  "autoload":    {
+    "psr-4": {
+      "DreamFactory\\Core\\SqlAnywhere\\": "src/"
+    }
+  },
+  "extra":       {
+    "branch-alias": {
+      "dev-develop": "0.2.x-dev"
+    }
+  }
+}

@@ -401,14 +401,13 @@ EOD;
                             break;
                         case 1: // Only 1 primary key
                             $primary = strstr($colnames[0], ' ', true);
-                            $cnk = strtolower($primary);
-                            if (isset($table->columns[$cnk])) {
-                                $table->columns[$cnk]->isPrimaryKey = true;
-                                if ((ColumnSchema::TYPE_INTEGER === $table->columns[$cnk]->type) &&
-                                    $table->columns[$cnk]->autoIncrement
-                                ) {
-                                    $table->columns[$cnk]->type = ColumnSchema::TYPE_ID;
+                            $column = $table->getColumn($primary);
+                            if (isset($column)) {
+                                $column->isPrimaryKey = true;
+                                if ((ColumnSchema::TYPE_INTEGER === $column->type) && $column->autoIncrement) {
+                                    $column->type = ColumnSchema::TYPE_ID;
                                 }
+                                $table->addColumn($column);
                             }
                             $table->primaryKey = $primary;
                             break;
@@ -425,26 +424,29 @@ EOD;
                     }
                     break;
                 case 'Unique Constraint':
-                    $field = strtolower(strstr($colnames, ' ', true));
-                    if (isset($table->columns[$field])) {
-                        $table->columns[$field]->IsUnique = true;
+                    $column = $table->getColumn(strstr($colnames, ' ', true));
+                    if (isset($column)) {
+                        $column->IsUnique = true;
+                        $table->addColumn($column);
                     }
                     break;
                 case 'Non-unique':
                     $colnames = explode(',', $colnames);
                     switch (count($colnames)) {
                         case 1: // Only 1 key
-                            $field = strtolower(strstr($colnames[0], ' ', true));
-                            if (isset($table->columns[$field])) {
-                                $table->columns[$field]->isIndex = true;
+                            $column = $table->getColumn(strstr($colnames[0], ' ', true));
+                            if (isset($column)) {
+                                $column->isIndex = true;
+                                $table->addColumn($column);
                             }
                             break;
                         default:
                             if (is_array($colnames)) {
                                 foreach ($colnames as $key) {
-                                    $field = strtolower(strstr($key, ' ', true));
-                                    if (isset($table->columns[$field])) {
-                                        $table->columns[$field]->isIndex = true;
+                                    $column = $table->getColumn(strstr($key, ' ', true));
+                                    if (isset($column)) {
+                                        $column->isIndex = true;
+                                        $table->addColumn($column);
                                     }
                                 }
                             }

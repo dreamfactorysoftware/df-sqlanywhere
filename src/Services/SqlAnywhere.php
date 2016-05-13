@@ -13,7 +13,7 @@ class SqlAnywhere extends SqlDb
 {
     public static function adaptConfig(array &$config)
     {
-        $config['driver'] = 'dblib';
+        $config['driver'] = 'sqlanywhere';
         if (in_array('dblib', \PDO::getAvailableDrivers())) {
             if (null !== $dumpLocation = config('df.db.freetds.dump')) {
                 if (!putenv("TDSDUMP=$dumpLocation")) {

@@ -14,11 +14,6 @@ class SqlAnywhereDbConfig extends SqlDbConfig
         return 'dblib';
     }
 
-    public static function getDefaultDsn()
-    {
-        return 'dblib:host=localhost:2638;dbname=database;charset=UTF-8';
-    }
-
     public static function getDefaultPort()
     {
         return 2638;

@@ -2,6 +2,7 @@
 namespace DreamFactory\Core\SqlAnywhere\Database\Schema;
 
 use DreamFactory\Core\Database\DataReader;
+use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Database\Schema\Schema;
 use DreamFactory\Core\Database\Schema\TableSchema;
 
@@ -10,6 +11,13 @@ use DreamFactory\Core\Database\Schema\TableSchema;
  */
 class SqlAnywhereSchema extends Schema
 {
+    /**
+     * @const string Quoting characters
+     */
+    const LEFT_QUOTE_CHARACTER = '[';
+
+    const RIGHT_QUOTE_CHARACTER = ']';
+
     /**
      * @param boolean $refresh if we need to refresh schema cache.
      *
@@ -268,32 +276,6 @@ class SqlAnywhereSchema extends Schema
     }
 
     /**
-     * Quotes a table name for use in a query.
-     * A simple table name does not schema prefix.
-     *
-     * @param string $name table name
-     *
-     * @return string the properly quoted table name
-     */
-    public function quoteSimpleTableName($name)
-    {
-        return '[' . $name . ']';
-    }
-
-    /**
-     * Quotes a column name for use in a query.
-     * A simple column name does not contain prefix.
-     *
-     * @param string $name column name
-     *
-     * @return string the properly quoted column name
-     */
-    public function quoteSimpleColumnName($name)
-    {
-        return '[' . $name . ']';
-    }
-
-    /**
      * Compares two table names.
      * The table names can be either quoted or unquoted. This method
      * will consider both cases.
@@ -523,11 +505,11 @@ SQL;
         $c->precision = $c->size = intval($column['length']);
         $c->comment = $column['remarks'];
 
-        $c->extractFixedLength($column['coltype']);
-        $c->extractMultiByteSupport($column['coltype']);
-        $c->extractType($column['coltype']);
+        $c->fixedLength = $this->extractFixedLength($column['coltype']);
+        $c->supportsMultibyte = $this->extractMultiByteSupport($column['coltype']);
+        $this->extractType($c, $column['coltype']);
         if (isset($column['default_value'])) {
-            $c->extractDefault($column['default_value']);
+            $this->extractDefault($c, $column['default_value']);
         }
 
         return $c;
@@ -743,6 +725,110 @@ SQL;
         }
 
         return $value;
+    }
+
+    /**
+     * Extracts the PHP type from DB type.
+     *
+     * @param string $dbType DB type
+     */
+    public function extractType(ColumnSchema &$column, $dbType)
+    {
+        parent::extractType($column, $dbType);
+
+        $simpleType = strstr($dbType, '(', true);
+        $simpleType = strtolower($simpleType ?: $dbType);
+
+        switch ($simpleType) {
+            case 'long varchar':
+                $column->type = ColumnSchema::TYPE_TEXT;
+                break;
+            case 'long nvarchar':
+                $column->type = ColumnSchema::TYPE_TEXT;
+                $column->supportsMultibyte = true;
+                break;
+        }
+    }
+
+    /**
+     * Extracts the default value for the column.
+     * The value is typecasted to correct PHP type.
+     *
+     * @param mixed $defaultValue the default value obtained from metadata
+     */
+    public function extractDefault(ColumnSchema &$field, $defaultValue)
+    {
+        if ('autoincrement' === $defaultValue) {
+            $field->defaultValue = null;
+            $field->autoIncrement = true;
+        } elseif (('(NULL)' === $defaultValue) || ('' === $defaultValue)) {
+            $field->defaultValue = null;
+        } elseif ($field->type === ColumnSchema::TYPE_BOOLEAN) {
+            if ('1' === $defaultValue) {
+                $field->defaultValue = true;
+            } elseif ('0' === $defaultValue) {
+                $field->defaultValue = false;
+            } else {
+                $field->defaultValue = null;
+            }
+        } elseif ($field->type === ColumnSchema::TYPE_TIMESTAMP) {
+            $field->defaultValue = null;
+            if ('current timestamp' === $defaultValue) {
+                $field->defaultValue = ['expression' => 'CURRENT TIMESTAMP'];
+                $field->type = ColumnSchema::TYPE_TIMESTAMP_ON_CREATE;
+            } elseif ('timestamp' === $defaultValue) {
+                $field->defaultValue = ['expression' => 'TIMESTAMP'];
+                $field->type = ColumnSchema::TYPE_TIMESTAMP_ON_UPDATE;
+            }
+        } else {
+            parent::extractDefault($field, str_replace(['(', ')', "'"], '', $defaultValue));
+        }
+    }
+
+    /**
+     * Extracts size, precision and scale information from column's DB type.
+     * We do nothing here, since sizes and precisions have been computed before.
+     *
+     * @param string $dbType the column's DB type
+     */
+    public function extractLimit(ColumnSchema &$field, $dbType)
+    {
+    }
+
+    /**
+     * Converts the input value to the type that this column is of.
+     *
+     * @param mixed $value input value
+     *
+     * @return mixed converted value
+     */
+    public function typecast(ColumnSchema $field, $value)
+    {
+        if ($field->phpType === 'boolean') {
+            return $value ? 1 : 0;
+        } else {
+            return parent::typecast($field, $value);
+        }
+    }
+
+    public function parseFieldForSelect(ColumnSchema $field, $as_quoted_string = false)
+    {
+        $name = ($as_quoted_string) ? $field->rawName : $field->name;
+        $alias = $field->getName(true);
+        if ($as_quoted_string && !ctype_alnum($alias)){
+            $alias = '['.$alias.']';
+        }
+        switch ($field->dbType) {
+//            case 'datetime':
+//            case 'datetimeoffset':
+//                return "(CONVERT(nvarchar(30), $name, 127)) AS $alias";
+            case 'geometry':
+            case 'geography':
+            case 'hierarchyid':
+                return "($name.ToString()) AS $alias";
+            default :
+                return parent::parseFieldForSelect($field, $as_quoted_string);
+        }
     }
 
     /**

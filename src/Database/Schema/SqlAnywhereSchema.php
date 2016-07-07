@@ -1,11 +1,11 @@
 <?php
 namespace DreamFactory\Core\SqlAnywhere\Database\Schema;
 
-use DreamFactory\Core\Database\DataReader;
 use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Database\Schema\FunctionSchema;
 use DreamFactory\Core\Database\Schema\ParameterSchema;
 use DreamFactory\Core\Database\Schema\ProcedureSchema;
+use DreamFactory\Core\Database\Schema\RoutineSchema;
 use DreamFactory\Core\Database\Schema\Schema;
 use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Enums\DbSimpleTypes;
@@ -760,6 +760,7 @@ MYSQL;
     /**
      * Extracts the PHP type from DB type.
      *
+     * @param ColumnSchema $column
      * @param string $dbType DB type
      */
     public function extractType(ColumnSchema &$column, $dbType)
@@ -784,7 +785,8 @@ MYSQL;
      * Extracts the default value for the column.
      * The value is typecasted to correct PHP type.
      *
-     * @param mixed $defaultValue the default value obtained from metadata
+     * @param ColumnSchema $field
+     * @param mixed        $defaultValue the default value obtained from metadata
      */
     public function extractDefault(ColumnSchema &$field, $defaultValue)
     {
@@ -819,6 +821,7 @@ MYSQL;
      * Extracts size, precision and scale information from column's DB type.
      * We do nothing here, since sizes and precisions have been computed before.
      *
+     * @param ColumnSchema $field
      * @param string $dbType the column's DB type
      */
     public function extractLimit(ColumnSchema &$field, $dbType)
@@ -828,6 +831,7 @@ MYSQL;
     /**
      * Converts the input value to the type that this column is of.
      *
+     * @param ColumnSchema $field
      * @param mixed $value input value
      *
      * @return mixed converted value
@@ -864,7 +868,7 @@ MYSQL;
     /**
      * @inheritdoc
      */
-    protected function getProcedureStatement($routine, array $param_schemas, array &$values)
+    protected function getProcedureStatement(RoutineSchema $routine, array $param_schemas, array &$values)
     {
         // Note that using the dblib driver doesn't allow binding of output parameters,
         // and also requires declaration prior to and selecting after to retrieve them.
@@ -881,7 +885,7 @@ MYSQL;
                     $bindings[$pName] = array_get($values, $key);
                     break;
                 case 'INOUT':
-                    $pName = $paramSchema->name;
+//                    $pName = $paramSchema->name;
 //                    $paramStr .= (empty($paramStr) ? $pName : ", $pName");
                     // with dblib driver you can't bind output parameters
 //                    $prefix .= "CREATE VARIABLE $pName {$paramSchema->dbType};";
@@ -889,7 +893,7 @@ MYSQL;
 //                    $postfix .= "SELECT $pName as " . $this->quoteColumnName($paramSchema->name) . ';';
                     break;
                 case 'OUT':
-                    $pName = $paramSchema->name;
+//                    $pName = $paramSchema->name;
 //                    $paramStr .= (empty($paramStr) ? $pName : ", $pName");
                     // with dblib driver you can't bind output parameters
 //                    $prefix .= "CREATE VARIABLE $pName {$paramSchema->dbType};";
@@ -898,7 +902,7 @@ MYSQL;
             }
         }
 
-        return "$prefix CALL $routine($paramStr); $postfix";
+        return "$prefix CALL {$routine->rawName}($paramStr); $postfix";
     }
 
     protected function doRoutineBinding($statement, array $paramSchemas, array &$values)

@@ -595,11 +595,22 @@ MYSQL;
 
         $rows = $this->selectColumn($sql, $bindings);
 
+        $sql = <<<MYSQL
+SELECT procname FROM SYS.SYSPROCPARMS {$where} AND parmtype = 4
+MYSQL;
+
+        $functions = $this->selectColumn($sql, $bindings);
+
         $defaultSchema = $this->getDefaultSchema();
         $addSchema = (!empty($schema) && ($defaultSchema !== $schema));
 
         $names = [];
         foreach ($rows as $name) {
+            if ((false === array_search($name, $functions)) && ('FUNCTION' === $type)) {
+                // only way to determine proc from func is by params??
+                continue;
+            }
+
             $schemaName = $schema;
             if ($addSchema) {
                 $publicName = $schemaName . '.' . $name;
@@ -609,7 +620,7 @@ MYSQL;
                 $rawName = $this->quoteTableName($name);
             }
             $settings = compact('schemaName', 'name', 'publicName', 'rawName');
-            $names[strtolower($name)] =
+            $names[strtolower($publicName)] =
                 ('PROCEDURE' === $type) ? new ProcedureSchema($settings) : new FunctionSchema($settings);
         }
 
@@ -634,6 +645,7 @@ MYSQL;
 
         foreach ($this->connection->select($sql) as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
+            $simpleType = static::extractSimpleType(array_get($row, 'parmdomain'));
             /*
             parmtype	SMALLINT	The type of parameter will be one of the following:
             0 - Normal parameter (variable)
@@ -642,22 +654,26 @@ MYSQL;
             3 - SQLCODE error value
             4 - Return value from function
              */
-            if (4 === array_get($row, 'parmtype')) {
-                $holder->returnType = array_get($row, 'parmdomain');
-            } else {
-                $holder->addParameter(new ParameterSchema(
-                    [
-                        'name'          => array_get($row, 'parmname'),
-                        'position'      => intval(array_get($row, 'parm_id')),
-                        'param_type'    => array_get($row, 'parmmode'),
-                        'type'          => static::extractSimpleType(array_get($row, 'parmdomain')),
-                        'db_type'       => array_get($row, 'parmdomain'),
-                        'length'        => (isset($row['length']) ? intval(array_get($row, 'length')) : null),
-                        'precision'     => (isset($row['length']) ? intval(array_get($row, 'length')) : null),
-                        'scale'         => (isset($row['scale']) ? intval(array_get($row, 'scale')) : null),
-                        'default_value' => array_get($row, 'default'),
-                    ]
-                ));
+            switch (intval(array_get($row, 'parmtype'))) {
+                case 0:
+                    $holder->addParameter(new ParameterSchema(
+                        [
+                            'name'          => array_get($row, 'parmname'),
+                            'position'      => intval(array_get($row, 'parm_id')),
+                            'param_type'    => array_get($row, 'parmmode'),
+                            'type'          => $simpleType,
+                            'db_type'       => array_get($row, 'parmdomain'),
+                            'length'        => (isset($row['length']) ? intval(array_get($row, 'length')) : null),
+                            'precision'     => (isset($row['length']) ? intval(array_get($row, 'length')) : null),
+                            'scale'         => (isset($row['scale']) ? intval(array_get($row, 'scale')) : null),
+                            'default_value' => array_get($row, 'default'),
+                        ]
+                    ));
+                    break;
+                case 1:
+                case 4:
+                    $holder->returnType = $simpleType;
+                    break;
             }
         }
     }
@@ -848,7 +864,7 @@ MYSQL;
     /**
      * @inheritdoc
      */
-    protected function callProcedureInternal($routine, array $param_schemas, array &$values)
+    protected function getProcedureStatement($routine, array $param_schemas, array &$values)
     {
         // Note that using the dblib driver doesn't allow binding of output parameters,
         // and also requires declaration prior to and selecting after to retrieve them.
@@ -862,73 +878,49 @@ MYSQL;
                 case 'IN':
                     $pName = ':' . $paramSchema->name;
                     $paramStr .= (empty($paramStr)) ? $pName : ", $pName";
-                    $bindings[$pName] = array_get($values, $paramSchema->name);
+                    $bindings[$pName] = array_get($values, $key);
                     break;
                 case 'INOUT':
-                    $pName = '@' . $paramSchema->name;
-                    $paramStr .= (empty($paramStr) ? $pName : ", $pName") . " OUTPUT";
+                    $pName = $paramSchema->name;
+//                    $paramStr .= (empty($paramStr) ? $pName : ", $pName");
                     // with dblib driver you can't bind output parameters
-                    $prefix .= "DECLARE $pName {$paramSchema->dbType};";
-                    $prefix .= "SET $pName = " . array_get($values, $paramSchema->name) . ';';
-                    $postfix .= "SELECT $pName as " . $this->quoteColumnName($paramSchema->name) . ';';
+//                    $prefix .= "CREATE VARIABLE $pName {$paramSchema->dbType};";
+//                    $prefix .= "SET $pName = " . array_get($values, $paramSchema->name) . ';';
+//                    $postfix .= "SELECT $pName as " . $this->quoteColumnName($paramSchema->name) . ';';
                     break;
                 case 'OUT':
-                    $pName = '@' . $paramSchema->name;
-                    $paramStr .= (empty($paramStr) ? $pName : ", $pName") . " OUTPUT";
+                    $pName = $paramSchema->name;
+//                    $paramStr .= (empty($paramStr) ? $pName : ", $pName");
                     // with dblib driver you can't bind output parameters
-                    $prefix .= "DECLARE $pName {$paramSchema->dbType};";
-                    $postfix .= "SELECT $pName as " . $this->quoteColumnName($paramSchema->name) . ';';
+//                    $prefix .= "CREATE VARIABLE $pName {$paramSchema->dbType};";
+//                    $postfix .= "SELECT $pName as " . $this->quoteColumnName($paramSchema->name) . ';';
                     break;
             }
         }
 
-        $sql = "$prefix EXEC $routine $paramStr; $postfix";
+        return "$prefix CALL $routine($paramStr); $postfix";
+    }
 
-        /** @type \PDOStatement $statement */
-        $statement = $this->connection->getPdo()->prepare($sql);
-
+    protected function doRoutineBinding($statement, array $paramSchemas, array &$values)
+    {
+        // Note that using the dblib driver doesn't allow binding of output parameters,
+        // and also requires declaration prior to and selecting after to retrieve them.
+        $dblib = in_array('dblib', \PDO::getAvailableDrivers());
         // do binding
-        $this->bindValues($statement, $bindings);
-
-        // execute
-        // support multiple result sets
-        try {
-            $statement->execute();
-            $reader = new DataReader($statement);
-        } catch (\Exception $e) {
-            $errorInfo = $e instanceof \PDOException ? $e : null;
-            $message = $e->getMessage();
-            throw new \Exception($message, (int)$e->getCode(), $errorInfo);
-        }
-        $result = [];
-        if (!empty($temp = $reader->readAll())) {
-            $result[] = $temp;
-        }
-        if ($reader->nextResult()) {
-            do {
-                $temp = $reader->readAll();
-                $keep = true;
-                if (1 == count($temp)) {
-                    $check = current($temp);
-                    foreach ($param_schemas as $key => $paramSchema) {
-                        if (array_key_exists($paramSchema->name, $check)) {
-                            $values[$paramSchema->name] = $check[$paramSchema->name];
-                            $keep = false;
-                        }
+        foreach ($paramSchemas as $key => $paramSchema) {
+            switch ($paramSchema->paramType) {
+                case 'IN':
+                    $this->bindValue($statement, ':' . $paramSchema->name, array_get($values, $key));
+                    break;
+                case 'INOUT':
+                case 'OUT':
+                    if (!$dblib) {
+                        $pdoType = $this->getPdoType($paramSchema->type);
+                        $this->bindParam($statement, ':' . $paramSchema->name, $values[$key],
+                            $pdoType | \PDO::PARAM_INPUT_OUTPUT, $paramSchema->length);
                     }
-                }
-                if ($keep) {
-                    if (!empty($temp)) {
-                        $result[] = $temp;
-                    }
-                }
-            } while ($reader->nextResult());
+                    break;
+            }
         }
-        // if there is only one data set, just return it
-        if (1 == count($result)) {
-            $result = $result[0];
-        }
-
-        return $result;
     }
 }

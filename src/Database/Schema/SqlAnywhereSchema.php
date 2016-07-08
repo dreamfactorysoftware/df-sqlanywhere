@@ -561,7 +561,7 @@ MYSQL;
 
         $names = [];
         foreach ($rows as $row) {
-            $row = array_change_key_case((array)$row, CASE_UPPER);
+            $row = array_change_key_case((array)$row, CASE_LOWER);
             $schemaName = isset($row['creator']) ? $row['creator'] : '';
             $tableName = isset($row['tname']) ? $row['tname'] : '';
             $isView = (false !== stripos($row['tabletype'], 'VIEW'));

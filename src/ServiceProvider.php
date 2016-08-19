@@ -1,6 +1,7 @@
 <?php
 namespace DreamFactory\Core\SqlAnywhere;
 
+use DreamFactory\Core\Components\ServiceDocBuilder;
 use DreamFactory\Core\Database\DbSchemaExtensions;
 use DreamFactory\Core\Enums\ServiceTypeGroups;
 use DreamFactory\Core\Services\ServiceManager;
@@ -14,27 +15,33 @@ use Illuminate\Database\DatabaseManager;
 
 class ServiceProvider extends \Illuminate\Support\ServiceProvider
 {
+    use ServiceDocBuilder;
+
     public function register()
     {
         // Add our database drivers.
         $this->app->resolving('db', function (DatabaseManager $db) {
             $db->extend('sqlanywhere', function ($config) {
-                $connector  = new SqlAnywhereConnector();
+                $connector = new SqlAnywhereConnector();
                 $connection = $connector->connect($config);
+
                 return new SqlAnywhereConnection($connection, $config["database"], $config["prefix"], $config);
             });
         });
-        
+
         // Add our service types.
-        $this->app->resolving('df.service', function (ServiceManager $df){
+        $this->app->resolving('df.service', function (ServiceManager $df) {
             $df->addType(
                 new ServiceType([
-                    'name'           => 'sqlanywhere',
-                    'label'          => 'SAP SQL Anywhere',
-                    'description'    => 'Database service supporting SAP SQL Anywhere connections.',
-                    'group'          => ServiceTypeGroups::DATABASE,
-                    'config_handler' => SqlAnywhereDbConfig::class,
-                    'factory'        => function ($config){
+                    'name'            => 'sqlanywhere',
+                    'label'           => 'SAP SQL Anywhere',
+                    'description'     => 'Database service supporting SAP SQL Anywhere connections.',
+                    'group'           => ServiceTypeGroups::DATABASE,
+                    'config_handler'  => SqlAnywhereDbConfig::class,
+                    'default_api_doc' => function ($service) {
+                        return $this->buildServiceDoc($service->id, SqlAnywhere::getApiDocInfo($service));
+                    },
+                    'factory'         => function ($config) {
                         return new SqlAnywhere($config);
                     },
                 ])
@@ -42,8 +49,8 @@ class ServiceProvider extends \Illuminate\Support\ServiceProvider
         });
 
         // Add our database extensions.
-        $this->app->resolving('db.schema', function (DbSchemaExtensions $db){
-            $db->extend('sqlanywhere', function ($connection){
+        $this->app->resolving('db.schema', function (DbSchemaExtensions $db) {
+            $db->extend('sqlanywhere', function ($connection) {
                 return new SqlAnywhereSchema($connection);
             });
         });

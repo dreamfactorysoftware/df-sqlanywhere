@@ -722,14 +722,10 @@ MYSQL;
      */
     public function alterColumn($table, $column, $definition)
     {
-        $definition = $this->getColumnType($definition);
-        $sql =
-            'ALTER TABLE ' .
-            $this->quoteTableName($table) .
-            ' ALTER COLUMN ' .
-            $this->quoteColumnName($column) .
-            ' ' .
-            $this->getColumnType($definition);
+        $sql = <<<MYSQL
+ALTER TABLE {$this->quoteTableName($table)}
+ALTER COLUMN {$this->quoteColumnName($column)} {$this->getColumnType($definition)}
+MYSQL;
 
         return $sql;
     }

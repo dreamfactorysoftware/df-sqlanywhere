@@ -316,6 +316,8 @@ class SqlAnywhereSchema extends Schema
         if ($value !== null) {
             $value = (int)($value) - 1;
         } else {
+            /** @noinspection SqlNoDataSourceInspection */
+            /** @noinspection SqlDialectInspection */
             $value = (int)$this->selectValue("SELECT MAX([{$table->primaryKey}]) FROM {$table->rawName}");
         }
         $name = strtr($table->rawName, ['[' => '', ']' => '']);
@@ -340,6 +342,7 @@ class SqlAnywhereSchema extends Schema
         $db = $this->connection;
         foreach ($this->normalTables[$schema] as $table) {
             $tableName = $this->quoteTableName($table->name);
+            /** @noinspection SqlNoDataSourceInspection */
             $db->statement("ALTER TABLE $tableName $enable CONSTRAINT ALL");
         }
     }
@@ -412,7 +415,7 @@ EOD;
                 case 'Unique Constraint':
                     $column = $table->getColumn(strstr($colnames, ' ', true));
                     if (isset($column)) {
-                        $column->IsUnique = true;
+                        $column->isUnique = true;
                         $table->addColumn($column);
                     }
                     break;
@@ -509,9 +512,9 @@ MYSQL;
         $c->precision = $c->size = intval($column['length']);
         $c->comment = $column['remarks'];
 
-        $c->fixedLength = $this->extractFixedLength($column['coltype']);
-        $c->supportsMultibyte = $this->extractMultiByteSupport($column['coltype']);
-        $this->extractType($c, $column['coltype']);
+        $c->fixedLength = $this->extractFixedLength($c->dbType);
+        $c->supportsMultibyte = $this->extractMultiByteSupport($c->dbType);
+        $this->extractType($c, $c->dbType);
         if (isset($column['default_value'])) {
             $this->extractDefault($c, $column['default_value']);
         }
@@ -851,11 +854,11 @@ MYSQL;
         switch ($field->dbType) {
 //            case 'datetime':
 //            case 'datetimeoffset':
-//                return "(CONVERT(nvarchar(30), $name, 127)) AS $alias";
+//                return $this->connection->raw("(CONVERT(nvarchar(30), $name, 127)) AS $alias");
             case 'geometry':
             case 'geography':
             case 'hierarchyid':
-                return "($name.ToString()) AS $alias";
+                return $this->connection->raw("($name.ToString()) AS $alias");
             default :
                 return parent::parseFieldForSelect($field, $as_quoted_string);
         }

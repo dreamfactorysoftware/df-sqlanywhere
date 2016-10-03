@@ -9,20 +9,24 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+## [0.5.0] - 2016-10-03
+- Update to latest df-core and df-sqldb changes and cleanup
+
 ## [0.4.0] - 2016-08-21
 ### Changed
 - General cleanup from declaration changes in df-core for service doc and providers
 
 ## [0.3.1] - 2016-07-08
 ### Added
-- DF-636 Adding ability using 'ids' parameter to return the schema of a stored procedure or function.
+- DF-636 Adding ability using 'ids' parameter to return the schema of a stored procedure or function
 
 ### Fixed
-- Bug fixes on stored procedures and functions.
+- Bug fixes on stored procedures and functions
 
 ## 0.3.0 - 2016-05-27
 First official release working with the new [df-core](https://github.com/dreamfactorysoftware/df-core) library.
 
-[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.4.0...0.5.0
 [0.4.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.3.1...0.4.0
 [0.3.1]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.3.0...0.3.1

@@ -350,25 +350,43 @@ class SqlAnywhereSchema extends Schema
     /**
      * @inheritdoc
      */
-    protected function loadTable(TableSchema $table)
+    protected function findTableReferences()
     {
-        if (!$this->findColumns($table)) {
-            return null;
+        $sql = <<<EOD
+SELECT columns, foreign_creator AS 'table_schema', foreign_tname AS 'table_name',
+    primary_creator AS 'referenced_table_schema', primary_tname AS 'referenced_table_name'
+FROM SYS.SYSFOREIGNKEYS WHERE foreign_creator NOT IN ('SYS','dbo')
+EOD;
+        $constraints = $this->connection->select($sql);
+        foreach ($constraints as &$constraint) {
+            $constraint = (array)$constraint;
+            list($constraint['column_name'], $constraint['referenced_column_name']) =
+                explode(' IS ', $constraint['columns']);
         }
 
-        $this->findConstraints($table);
-
-        return $table;
+        return $constraints;
     }
 
     /**
-     * Collects the foreign key column details for the given table.
-     * Also, collects the foreign tables and columns that reference the given table.
-     *
-     * @param TableSchema $table the table metadata
+     * @inheritdoc
      */
-    protected function findConstraints($table)
+    protected function findColumns(TableSchema $table)
     {
+        $sql = <<<MYSQL
+SELECT * FROM sys.syscolumns WHERE creator = '{$table->schemaName}' AND tname = '{$table->tableName}'
+MYSQL;
+
+        if (!empty($columns = $this->connection->select($sql))) {
+            foreach ($columns as $column) {
+                $column = array_change_key_case((array)$column, CASE_LOWER);
+                $c = $this->createColumn($column);
+                $table->addColumn($c);
+                if ($c->autoIncrement && $table->sequenceName === null) {
+                    $table->sequenceName = $table->name;
+                }
+            }
+        }
+
         $schema = (!empty($table->schemaName)) ? $table->schemaName : $this->getDefaultSchema();
 
         $sql = <<<EOD
@@ -444,54 +462,6 @@ EOD;
                     break;
             }
         }
-
-        $sql = <<<EOD
-SELECT columns, foreign_creator AS 'table_schema', foreign_tname AS 'table_name',
-    primary_creator AS 'referenced_table_schema', primary_tname AS 'referenced_table_name'
-FROM SYS.SYSFOREIGNKEYS WHERE foreign_creator NOT IN ('SYS','dbo')
-EOD;
-        $constraints = $this->connection->select($sql);
-        foreach ($constraints as &$constraint) {
-            $constraint = (array)$constraint;
-            list($constraint['column_name'], $constraint['referenced_column_name']) =
-                explode(' IS ', $constraint['columns']);
-        }
-
-        $this->buildTableRelations($table, $constraints);
-    }
-
-    /**
-     * Collects the table column metadata.
-     *
-     * @param TableSchema $table the table metadata
-     *
-     * @return boolean whether the table exists in the database
-     */
-    protected function findColumns($table)
-    {
-        $sql = <<<MYSQL
-SELECT * FROM sys.syscolumns WHERE creator = '{$table->schemaName}' AND tname = '{$table->tableName}'
-MYSQL;
-
-        try {
-            $columns = $this->connection->select($sql);
-            if (empty($columns)) {
-                return false;
-            }
-        } catch (\Exception $e) {
-            return false;
-        }
-
-        foreach ($columns as $column) {
-            $column = array_change_key_case((array)$column, CASE_LOWER);
-            $c = $this->createColumn($column);
-            $table->addColumn($c);
-            if ($c->autoIncrement && $table->sequenceName === null) {
-                $table->sequenceName = $table->name;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -760,7 +730,7 @@ MYSQL;
      * Extracts the PHP type from DB type.
      *
      * @param ColumnSchema $column
-     * @param string $dbType DB type
+     * @param string       $dbType DB type
      */
     public function extractType(ColumnSchema &$column, $dbType)
     {
@@ -821,7 +791,7 @@ MYSQL;
      * We do nothing here, since sizes and precisions have been computed before.
      *
      * @param ColumnSchema $field
-     * @param string $dbType the column's DB type
+     * @param string       $dbType the column's DB type
      */
     public function extractLimit(ColumnSchema &$field, $dbType)
     {
@@ -831,7 +801,7 @@ MYSQL;
      * Converts the input value to the type that this column is of.
      *
      * @param ColumnSchema $field
-     * @param mixed $value input value
+     * @param mixed        $value input value
      *
      * @return mixed converted value
      */

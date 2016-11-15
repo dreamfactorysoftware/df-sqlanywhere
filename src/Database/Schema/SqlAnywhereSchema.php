@@ -397,7 +397,7 @@ EOD;
 SELECT * FROM sys.syscolumns WHERE creator = :schema AND tname = :table
 MYSQL;
 
-        if (!empty($columns = $this->connection->select($sql))) {
+        if (!empty($columns = $this->connection->select($sql, $params))) {
             $sql = <<<EOD
 SELECT indextype,colnames FROM sys.sysindexes WHERE creator = :schema AND tname = :table
 EOD;

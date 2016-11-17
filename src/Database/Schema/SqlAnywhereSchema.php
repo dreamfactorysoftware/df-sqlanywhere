@@ -8,6 +8,7 @@ use DreamFactory\Core\Database\Schema\ProcedureSchema;
 use DreamFactory\Core\Database\Schema\RoutineSchema;
 use DreamFactory\Core\Database\Schema\Schema;
 use DreamFactory\Core\Database\Schema\TableSchema;
+use DreamFactory\Core\Enums\DbResourceTypes;
 use DreamFactory\Core\Enums\DbSimpleTypes;
 
 /**
@@ -15,6 +16,11 @@ use DreamFactory\Core\Enums\DbSimpleTypes;
  */
 class SqlAnywhereSchema extends Schema
 {
+    /**
+     * Underlying database provides field-level schema, i.e. SQL (true) vs NoSQL (false)
+     */
+    const PROVIDES_FIELD_SCHEMA = true;
+
     /**
      * @const string Quoting characters
      */
@@ -30,6 +36,19 @@ class SqlAnywhereSchema extends Schema
     public function getDefaultSchema($refresh = false)
     {
         return $this->getUserName();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getSupportedResourceTypes()
+    {
+        return [
+            DbResourceTypes::TYPE_TABLE,
+            DbResourceTypes::TYPE_VIEW,
+            DbResourceTypes::TYPE_PROCEDURE,
+            DbResourceTypes::TYPE_FUNCTION
+        ];
     }
 
     protected function translateSimpleColumnTypes(array &$info)
@@ -350,101 +369,8 @@ class SqlAnywhereSchema extends Schema
     /**
      * @inheritdoc
      */
-    protected function loadTable(TableSchema $table)
+    protected function findTableReferences()
     {
-        if (!$this->findColumns($table)) {
-            return null;
-        }
-
-        $this->findConstraints($table);
-
-        return $table;
-    }
-
-    /**
-     * Collects the foreign key column details for the given table.
-     * Also, collects the foreign tables and columns that reference the given table.
-     *
-     * @param TableSchema $table the table metadata
-     */
-    protected function findConstraints($table)
-    {
-        $schema = (!empty($table->schemaName)) ? $table->schemaName : $this->getDefaultSchema();
-
-        $sql = <<<EOD
-SELECT indextype,colnames FROM SYS.SYSINDEXES WHERE creator = :schema AND tname = :table
-EOD;
-        $params = [':schema' => $schema, ':table' => $table->tableName];
-        $constraints = $this->connection->select($sql, $params);
-
-        foreach ($constraints as $key => $constraint) {
-            $constraint = (array)$constraint;
-            $type = $constraint['indextype'];
-            $colnames = $constraint['colnames'];
-            switch ($type) {
-                case 'Primary Key':
-                    $colnames = explode(',', $colnames);
-                    switch (count($colnames)) {
-                        case 0: // No primary key on table
-                            $table->primaryKey = null;
-                            break;
-                        case 1: // Only 1 primary key
-                            $primary = strstr($colnames[0], ' ', true);
-                            $column = $table->getColumn($primary);
-                            if (isset($column)) {
-                                $column->isPrimaryKey = true;
-                                if ((DbSimpleTypes::TYPE_INTEGER === $column->type) && $column->autoIncrement) {
-                                    $column->type = DbSimpleTypes::TYPE_ID;
-                                }
-                                $table->addColumn($column);
-                            }
-                            $table->primaryKey = $primary;
-                            break;
-                        default:
-                            if (is_array($colnames)) {
-                                $primary = '';
-                                foreach ($colnames as $key) {
-                                    $key = strstr($key, ' ', true);
-                                    $primary = (empty($key)) ? $key : ',' . $key;
-                                }
-                                $table->primaryKey = $primary;
-                            }
-                            break;
-                    }
-                    break;
-                case 'Unique Constraint':
-                    $column = $table->getColumn(strstr($colnames, ' ', true));
-                    if (isset($column)) {
-                        $column->isUnique = true;
-                        $table->addColumn($column);
-                    }
-                    break;
-                case 'Non-unique':
-                    $colnames = explode(',', $colnames);
-                    switch (count($colnames)) {
-                        case 1: // Only 1 key
-                            $column = $table->getColumn(strstr($colnames[0], ' ', true));
-                            if (isset($column)) {
-                                $column->isIndex = true;
-                                $table->addColumn($column);
-                            }
-                            break;
-                        default:
-                            if (is_array($colnames)) {
-                                foreach ($colnames as $key) {
-                                    $column = $table->getColumn(strstr($key, ' ', true));
-                                    if (isset($column)) {
-                                        $column->isIndex = true;
-                                        $table->addColumn($column);
-                                    }
-                                }
-                            }
-                            break;
-                    }
-                    break;
-            }
-        }
-
         $sql = <<<EOD
 SELECT columns, foreign_creator AS 'table_schema', foreign_tname AS 'table_name',
     primary_creator AS 'referenced_table_schema', primary_tname AS 'referenced_table_name'
@@ -457,41 +383,53 @@ EOD;
                 explode(' IS ', $constraint['columns']);
         }
 
-        $this->buildTableRelations($table, $constraints);
+        return $constraints;
     }
 
     /**
-     * Collects the table column metadata.
-     *
-     * @param TableSchema $table the table metadata
-     *
-     * @return boolean whether the table exists in the database
+     * @inheritdoc
      */
-    protected function findColumns($table)
+    protected function findColumns(TableSchema $table)
     {
+        $schema = (!empty($table->schemaName)) ? $table->schemaName : $this->getDefaultSchema();
+        $params = [':schema' => $schema, ':table' => $table->tableName];
         $sql = <<<MYSQL
-SELECT * FROM sys.syscolumns WHERE creator = '{$table->schemaName}' AND tname = '{$table->tableName}'
+SELECT * FROM sys.syscolumns WHERE creator = :schema AND tname = :table
 MYSQL;
 
-        try {
-            $columns = $this->connection->select($sql);
-            if (empty($columns)) {
-                return false;
+        if (!empty($columns = $this->connection->select($sql, $params))) {
+            $sql = <<<EOD
+SELECT indextype,colnames FROM sys.sysindexes WHERE creator = :schema AND tname = :table
+EOD;
+            $constraints = $this->connection->select($sql, $params);
+
+            foreach ($constraints as $key => $constraint) {
+                $constraint = (array)$constraint;
+                $type = $constraint['indextype'];
+                $colnames = $constraint['colnames'];
+                $colnames = explode(',', $colnames);
+                foreach ($colnames as $key) {
+                    $key = strstr($key, ' ', true);
+                    foreach ($columns as &$column) {
+                        if ($key === array_get($column, 'cname')) {
+                            switch ($type) {
+                                case 'Primary Key':
+                                    $column['isPrimaryKey'] = true;
+                                    break;
+                                case 'Unique Constraint':
+                                    $column['isUnique'] = true;
+                                    break;
+                                case 'Non-unique':
+                                    $column['isIndex'] = true;
+                                    break;
+                            }
+                        }
+                    }
+                }
             }
-        } catch (\Exception $e) {
-            return false;
         }
 
-        foreach ($columns as $column) {
-            $column = array_change_key_case((array)$column, CASE_LOWER);
-            $c = $this->createColumn($column);
-            $table->addColumn($c);
-            if ($c->autoIncrement && $table->sequenceName === null) {
-                $table->sequenceName = $table->name;
-            }
-        }
-
-        return true;
+        return $columns;
     }
 
     /**
@@ -760,7 +698,7 @@ MYSQL;
      * Extracts the PHP type from DB type.
      *
      * @param ColumnSchema $column
-     * @param string $dbType DB type
+     * @param string       $dbType DB type
      */
     public function extractType(ColumnSchema &$column, $dbType)
     {
@@ -821,7 +759,7 @@ MYSQL;
      * We do nothing here, since sizes and precisions have been computed before.
      *
      * @param ColumnSchema $field
-     * @param string $dbType the column's DB type
+     * @param string       $dbType the column's DB type
      */
     public function extractLimit(ColumnSchema &$field, $dbType)
     {
@@ -831,7 +769,7 @@ MYSQL;
      * Converts the input value to the type that this column is of.
      *
      * @param ColumnSchema $field
-     * @param mixed $value input value
+     * @param mixed        $value input value
      *
      * @return mixed converted value
      */
@@ -844,7 +782,7 @@ MYSQL;
         }
     }
 
-    public function parseFieldForSelect(ColumnSchema $field, $as_quoted_string = false)
+    public function parseFieldForSelect($field, $as_quoted_string = false)
     {
         $name = ($as_quoted_string) ? $field->rawName : $field->name;
         $alias = $field->getName(true);

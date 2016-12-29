@@ -1,6 +1,8 @@
 <?php
 namespace DreamFactory\Core\SqlAnywhere\Database\Schema;
 
+use DreamFactory\Core\Database\Enums\DbFunctionUses;
+use DreamFactory\Core\Database\Enums\FunctionTypes;
 use DreamFactory\Core\Database\Schema\ColumnSchema;
 use DreamFactory\Core\Database\Schema\FunctionSchema;
 use DreamFactory\Core\Database\Schema\ParameterSchema;
@@ -356,7 +358,7 @@ class SqlAnywhereSchema extends Schema
     {
         $enable = $check ? 'CHECK' : 'NOCHECK';
         if (!isset($this->normalTables[$schema])) {
-            $this->normalTables[$schema] = $this->findTableNames($schema, false);
+            $this->normalTables[$schema] = $this->findTableNames($schema);
         }
         $db = $this->connection;
         foreach ($this->normalTables[$schema] as $table) {
@@ -392,7 +394,7 @@ EOD;
     protected function findColumns(TableSchema $table)
     {
         $schema = (!empty($table->schemaName)) ? $table->schemaName : $this->getDefaultSchema();
-        $params = [':schema' => $schema, ':table' => $table->tableName];
+        $params = [':schema' => $schema, ':table' => $table->resourceName];
         $sql = <<<MYSQL
 SELECT * FROM sys.syscolumns WHERE creator = :schema AND tname = :table
 MYSQL;
@@ -457,6 +459,20 @@ EOD;
             $this->extractDefault($c, $column['default_value']);
         }
 
+        switch ($c->dbType) {
+            case 'geometry':
+            case 'geography':
+            case 'hierarchyid':
+                $c->dbFunction = [
+                    [
+                        'use'           => [DbFunctionUses::SELECT],
+                        'function'      => "({$c->quotedName}.ToString())",
+                        'function_type' => FunctionTypes::DATABASE
+                    ]
+                ];
+                break;
+        }
+
         return $c;
     }
 
@@ -474,7 +490,7 @@ MYSQL;
      */
     protected function findTableNames($schema = '')
     {
-            $condition = "tabletype = 'TABLE'";
+        $condition = "tabletype = 'TABLE'";
         $params = [];
         if (!empty($schema)) {
             $condition .= " AND creator = :schema";
@@ -494,11 +510,11 @@ MYSQL;
         foreach ($rows as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
             $schemaName = isset($row['creator']) ? $row['creator'] : '';
-            $tableName = isset($row['tname']) ? $row['tname'] : '';
-            $internalName = $schemaName . '.' . $tableName;
-            $name = ($addSchema) ? $internalName : $tableName;
-            $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($tableName);
-            $settings = compact('schemaName', 'tableName', 'name', 'internalName','quotedName');
+            $resourceName = isset($row['tname']) ? $row['tname'] : '';
+            $internalName = $schemaName . '.' . $resourceName;
+            $name = ($addSchema) ? $internalName : $resourceName;
+            $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($resourceName);
+            $settings = compact('schemaName', 'resourceName', 'name', 'internalName', 'quotedName');
             $settings['description'] = $row['remarks'];
             $names[strtolower($name)] = new TableSchema($settings);
         }
@@ -511,7 +527,7 @@ MYSQL;
      */
     protected function findViewNames($schema = '')
     {
-            $condition = "tabletype IN ('VIEW','MAT VIEW')";
+        $condition = "tabletype IN ('VIEW','MAT VIEW')";
         $params = [];
         if (!empty($schema)) {
             $condition .= " AND creator = :schema";
@@ -531,11 +547,11 @@ MYSQL;
         foreach ($rows as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
             $schemaName = isset($row['creator']) ? $row['creator'] : '';
-            $tableName = isset($row['tname']) ? $row['tname'] : '';
-            $internalName = $schemaName . '.' . $tableName;
-            $name = ($addSchema) ? $internalName : $tableName;
-            $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($tableName);
-            $settings = compact('schemaName', 'tableName', 'name', 'internalName','quotedName');
+            $resourceName = isset($row['tname']) ? $row['tname'] : '';
+            $internalName = $schemaName . '.' . $resourceName;
+            $name = ($addSchema) ? $internalName : $resourceName;
+            $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($resourceName);
+            $settings = compact('schemaName', 'resourceName', 'name', 'internalName', 'quotedName');
             $settings['isView'] = true;
             $settings['description'] = $row['remarks'];
             $names[strtolower($name)] = new TableSchema($settings);
@@ -572,18 +588,18 @@ MYSQL;
         $addSchema = (!empty($schema) && ($defaultSchema !== $schema));
 
         $names = [];
-        foreach ($rows as $name) {
-            if ((false === array_search($name, $functions)) && ('FUNCTION' === $type)) {
+        foreach ($rows as $resourceName) {
+            if ((false === array_search($resourceName, $functions)) && ('FUNCTION' === $type)) {
                 // only way to determine proc from func is by params??
                 continue;
             }
 
             $schemaName = $schema;
-            $internalName = $schemaName . '.' . $name;
-            $publicName = ($addSchema) ? $internalName : $name;
-            $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($name);
-            $settings = compact('schemaName', 'name', 'publicName', 'quotedName', 'internalName');
-            $names[strtolower($publicName)] =
+            $internalName = $schemaName . '.' . $resourceName;
+            $name = ($addSchema) ? $internalName : $resourceName;
+            $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($resourceName);
+            $settings = compact('schemaName', 'resourceName', 'name', 'quotedName', 'internalName');
+            $names[strtolower($name)] =
                 ('PROCEDURE' === $type) ? new ProcedureSchema($settings) : new FunctionSchema($settings);
         }
 
@@ -593,9 +609,9 @@ MYSQL;
     /**
      * Loads the parameter metadata for the specified stored procedure or function.
      *
-     * @param ProcedureSchema|FunctionSchema $holder
+     * @param RoutineSchema $holder
      */
-    protected function loadParameters(&$holder)
+    protected function loadParameters(RoutineSchema &$holder)
     {
         $sql = <<<MYSQL
 SELECT 
@@ -697,11 +713,11 @@ MYSQL;
     {
         switch ($field_info->type) {
             case DbSimpleTypes::TYPE_BOOLEAN:
-                $value = (filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0);
+                $value = ($value ? 1 : 0);
                 break;
         }
 
-        return $value;
+        return parent::parseValueForSet($value, $field_info);
     }
 
     public function formatValue($value, $type)
@@ -801,26 +817,6 @@ MYSQL;
             return $value ? 1 : 0;
         } else {
             return parent::typecast($field, $value);
-        }
-    }
-
-    public function parseFieldForSelect($field, $as_quoted_string = false)
-    {
-        $name = ($as_quoted_string) ? $field->quotedName : $field->name;
-        $alias = $field->getName(true);
-        if ($as_quoted_string && !ctype_alnum($alias)) {
-            $alias = '[' . $alias . ']';
-        }
-        switch ($field->dbType) {
-//            case 'datetime':
-//            case 'datetimeoffset':
-//                return $this->connection->raw("(CONVERT(nvarchar(30), $name, 127)) AS $alias");
-            case 'geometry':
-            case 'geography':
-            case 'hierarchyid':
-                return $this->connection->raw("($name.ToString()) AS $alias");
-            default :
-                return parent::parseFieldForSelect($field, $as_quoted_string);
         }
     }
 

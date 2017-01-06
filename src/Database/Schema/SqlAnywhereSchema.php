@@ -611,7 +611,7 @@ MYSQL;
      *
      * @param RoutineSchema $holder
      */
-    protected function loadParameters(RoutineSchema &$holder)
+    protected function loadParameters(RoutineSchema $holder)
     {
         $sql = <<<MYSQL
 SELECT 

@@ -702,8 +702,7 @@ MYSQL;
     public function alterColumn($table, $column, $definition)
     {
         $sql = <<<MYSQL
-ALTER TABLE {$this->quoteTableName($table)}
-ALTER COLUMN {$this->quoteColumnName($column)} {$this->getColumnType($definition)}
+ALTER TABLE $table ALTER COLUMN {$this->quoteColumnName($column)} {$this->getColumnType($definition)}
 MYSQL;
 
         return $sql;

@@ -2,7 +2,7 @@
 namespace DreamFactory\Core\SqlAnywhere;
 
 use DreamFactory\Core\Components\ServiceDocBuilder;
-use DreamFactory\Core\Database\DbSchemaExtensions;
+use DreamFactory\Core\Components\DbSchemaExtensions;
 use DreamFactory\Core\Enums\ServiceTypeGroups;
 use DreamFactory\Core\Services\ServiceManager;
 use DreamFactory\Core\Services\ServiceType;

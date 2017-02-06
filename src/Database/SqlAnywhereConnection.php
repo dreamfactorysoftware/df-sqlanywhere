@@ -11,14 +11,9 @@ use Illuminate\Database\Connection;
 class SqlAnywhereConnection extends Connection
 {
 	/**
-	 * Execute a Closure within a transaction.
-	 *
-	 * @param  \Closure  $callback
-	 * @return mixed
-	 *
-	 * @throws \Exception
+	 * @inheritdoc
 	 */
-	public function transaction(\Closure $callback)
+	public function transaction(\Closure $callback, $attempts = 1)
 	{
 		if ($this->getDriverName() == 'pdo_dblib')
 		{

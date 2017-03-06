@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 ### Fixed
 
+## [0.8.0] - 2017-03-03
+- Major restructuring to upgrade to Laravel 5.4 and be more dynamically available
+
 ## [0.7.0] - 2017-01-16
 ### Changed
 - Adhere to refactored df-core, see df-database
@@ -37,7 +40,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## 0.3.0 - 2016-05-27
 First official release working with the new [df-core](https://github.com/dreamfactorysoftware/df-core) library.
 
-[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.7.0...HEAD
+[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.8.0...HEAD
+[0.8.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.4.0...0.5.0

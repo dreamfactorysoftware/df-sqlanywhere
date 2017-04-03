@@ -719,16 +719,14 @@ MYSQL;
         return parent::parseValueForSet($value, $field_info);
     }
 
-    public function formatValue($value, $type)
+    public function formatValue($value, $field_info)
     {
-        $value = parent::formatValue($value, $type);
-
         if (' ' === $value) {
             // SQL Anywhere strangely returns empty string as a single space string
-            return '';
+            $value = '';
         }
 
-        return $value;
+        return parent::formatValue($value, $field_info);
     }
 
     /**

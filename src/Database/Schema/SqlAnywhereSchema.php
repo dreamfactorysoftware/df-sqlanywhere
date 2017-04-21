@@ -708,27 +708,14 @@ MYSQL;
         return $sql;
     }
 
-    public function parseValueForSet($value, $field_info)
+    public function typecastToClient($value, $field_info, $allow_null = true)
     {
-        switch ($field_info->type) {
-            case DbSimpleTypes::TYPE_BOOLEAN:
-                $value = ($value ? 1 : 0);
-                break;
-        }
-
-        return parent::parseValueForSet($value, $field_info);
-    }
-
-    public function formatValue($value, $type)
-    {
-        $value = parent::formatValue($value, $type);
-
         if (' ' === $value) {
             // SQL Anywhere strangely returns empty string as a single space string
-            return '';
+            $value = '';
         }
 
-        return $value;
+        return parent::typecastToClient($value, $field_info, $allow_null);
     }
 
     /**
@@ -803,23 +790,6 @@ MYSQL;
     }
 
     /**
-     * Converts the input value to the type that this column is of.
-     *
-     * @param ColumnSchema $field
-     * @param mixed        $value input value
-     *
-     * @return mixed converted value
-     */
-    public function typecast(ColumnSchema $field, $value)
-    {
-        if ($field->phpType === 'boolean') {
-            return $value ? 1 : 0;
-        } else {
-            return parent::typecast($field, $value);
-        }
-    }
-
-    /**
      * @inheritdoc
      */
     protected function getProcedureStatement(RoutineSchema $routine, array $param_schemas, array &$values)
@@ -873,7 +843,7 @@ MYSQL;
                 case 'INOUT':
                 case 'OUT':
                     if (!$dblib) {
-                        $pdoType = $this->getPdoType($paramSchema->type);
+                        $pdoType = $this->extractPdoType($paramSchema->type);
                         $this->bindParam($statement, ':' . $paramSchema->name, $values[$key],
                             $pdoType | \PDO::PARAM_INPUT_OUTPUT, $paramSchema->length);
                     }

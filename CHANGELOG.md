@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.13.0] - 2017-09-18
+### Added
+- Support for HAS_ONE relationship in schema management and relationship handling
+- DF-1060 Support for data retrieval (GET) caching and configuration
 ### Fixed
 - DF-1160 Correct resource name usage for procedures and functions when pulling parameters
 
@@ -54,7 +59,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## 0.3.0 - 2016-05-27
 First official release working with the new [df-core](https://github.com/dreamfactorysoftware/df-core) library.
 
-[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.12.0...HEAD
+[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.13.0...HEAD
+[0.13.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.9.0...0.10.0

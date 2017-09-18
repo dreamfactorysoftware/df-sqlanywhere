@@ -603,7 +603,7 @@ SELECT
 FROM 
     SYS.SYSPROCPARMS
 WHERE 
-    procname = '{$holder->name}' AND creator = '{$holder->schemaName}'
+    procname = '{$holder->resourceName}' AND creator = '{$holder->schemaName}'
 MYSQL;
 
         foreach ($this->connection->select($sql) as $row) {

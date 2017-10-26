@@ -329,29 +329,6 @@ class SqlAnywhereSchema extends SqlSchema
         $this->connection->statement("DBCC CHECKIDENT ('$name',RESEED,$value)");
     }
 
-    private $normalTables = [];  // non-view tables
-
-    /**
-     * Enables or disables integrity check.
-     *
-     * @param boolean $check  whether to turn on or off the integrity check.
-     * @param string  $schema the schema of the tables. Defaults to empty string, meaning the current or default schema.
-     *
-     */
-    public function checkIntegrity($check = true, $schema = '')
-    {
-        $enable = $check ? 'CHECK' : 'NOCHECK';
-        if (!isset($this->normalTables[$schema])) {
-            $this->normalTables[$schema] = $this->findTableNames($schema);
-        }
-        $db = $this->connection;
-        foreach ($this->normalTables[$schema] as $table) {
-            $tableName = $this->quoteTableName($table->name);
-            /** @noinspection SqlNoDataSourceInspection */
-            $db->statement("ALTER TABLE $tableName $enable CONSTRAINT ALL");
-        }
-    }
-
     /**
      * @inheritdoc
      */
@@ -377,8 +354,7 @@ EOD;
      */
     protected function findColumns(TableSchema $table)
     {
-        $schema = (!empty($table->schemaName)) ? $table->schemaName : $this->getDefaultSchema();
-        $params = [':schema' => $schema, ':table' => $table->resourceName];
+        $params = [':schema' => $table->schemaName, ':table' => $table->resourceName];
         $sql = <<<MYSQL
 SELECT * FROM sys.syscolumns WHERE creator = :schema AND tname = :table
 MYSQL;
@@ -487,16 +463,13 @@ MYSQL;
 
         $rows = $this->connection->select($sql, $params);
 
-        $defaultSchema = $this->getNamingSchema();
-        $addSchema = (!empty($schema) && ($defaultSchema !== $schema));
-
         $names = [];
         foreach ($rows as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
             $schemaName = isset($row['creator']) ? $row['creator'] : '';
             $resourceName = isset($row['tname']) ? $row['tname'] : '';
             $internalName = $schemaName . '.' . $resourceName;
-            $name = ($addSchema) ? $internalName : $resourceName;
+            $name = $resourceName;
             $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($resourceName);
             $settings = compact('schemaName', 'resourceName', 'name', 'internalName', 'quotedName');
             $settings['description'] = $row['remarks'];
@@ -524,16 +497,13 @@ MYSQL;
 
         $rows = $this->connection->select($sql, $params);
 
-        $defaultSchema = $this->getNamingSchema();
-        $addSchema = (!empty($schema) && ($defaultSchema !== $schema));
-
         $names = [];
         foreach ($rows as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
             $schemaName = isset($row['creator']) ? $row['creator'] : '';
             $resourceName = isset($row['tname']) ? $row['tname'] : '';
             $internalName = $schemaName . '.' . $resourceName;
-            $name = ($addSchema) ? $internalName : $resourceName;
+            $name = $resourceName;
             $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($resourceName);
             $settings = compact('schemaName', 'resourceName', 'name', 'internalName', 'quotedName');
             $settings['isView'] = true;
@@ -568,9 +538,6 @@ MYSQL;
 
         $functions = $this->selectColumn($sql, $bindings);
 
-        $defaultSchema = $this->getNamingSchema();
-        $addSchema = (!empty($schema) && ($defaultSchema !== $schema));
-
         $names = [];
         foreach ($rows as $resourceName) {
             if ((false === array_search($resourceName, $functions)) && ('FUNCTION' === $type)) {
@@ -580,7 +547,7 @@ MYSQL;
 
             $schemaName = $schema;
             $internalName = $schemaName . '.' . $resourceName;
-            $name = ($addSchema) ? $internalName : $resourceName;
+            $name = $resourceName;
             $quotedName = $this->quoteTableName($schemaName) . '.' . $this->quoteTableName($resourceName);
             $settings = compact('schemaName', 'resourceName', 'name', 'quotedName', 'internalName');
             $names[strtolower($name)] =

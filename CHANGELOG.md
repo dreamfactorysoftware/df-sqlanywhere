@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+## [0.14.0] - 2017-11-03
+- Move preferred schema naming to service level
+- Add subscription requirements to service provider
 
 ## [0.13.0] - 2017-09-18
 ### Added
@@ -59,7 +62,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ## 0.3.0 - 2016-05-27
 First official release working with the new [df-core](https://github.com/dreamfactorysoftware/df-core) library.
 
-[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.13.0...HEAD
+[Unreleased]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.12.0...0.13.0
 [0.12.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/dreamfactorysoftware/df-sqlanywhere/compare/0.10.0...0.11.0

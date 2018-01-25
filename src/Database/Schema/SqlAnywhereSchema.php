@@ -1,4 +1,5 @@
 <?php
+
 namespace DreamFactory\Core\SqlAnywhere\Database\Schema;
 
 use DreamFactory\Core\Database\Enums\DbFunctionUses;
@@ -25,11 +26,9 @@ class SqlAnywhereSchema extends SqlSchema
     const RIGHT_QUOTE_CHARACTER = ']';
 
     /**
-     * @param boolean $refresh if we need to refresh schema cache.
-     *
-     * @return string default schema.
+     * @inheritdoc
      */
-    public function getDefaultSchema($refresh = false)
+    public function getDefaultSchema()
     {
         return $this->getUserName();
     }
@@ -332,111 +331,122 @@ class SqlAnywhereSchema extends SqlSchema
     /**
      * @inheritdoc
      */
-    protected function findTableReferences()
-    {
-        $sql = <<<EOD
-SELECT columns, foreign_creator AS 'table_schema', foreign_tname AS 'table_name',
-    primary_creator AS 'referenced_table_schema', primary_tname AS 'referenced_table_name'
-FROM SYS.SYSFOREIGNKEYS WHERE foreign_creator NOT IN ('SYS','dbo')
-EOD;
-        $constraints = $this->connection->select($sql);
-        foreach ($constraints as &$constraint) {
-            $constraint = (array)$constraint;
-            list($constraint['column_name'], $constraint['referenced_column_name']) =
-                explode(' IS ', $constraint['columns']);
-        }
-
-        return $constraints;
-    }
-
-    /**
-     * @inheritdoc
-     */
-    protected function findColumns(TableSchema $table)
+    protected function loadTableColumns(TableSchema $table)
     {
         $params = [':schema' => $table->schemaName, ':table' => $table->resourceName];
         $sql = <<<MYSQL
 SELECT * FROM sys.syscolumns WHERE creator = :schema AND tname = :table
 MYSQL;
 
-        if (!empty($columns = $this->connection->select($sql, $params))) {
-            $sql = <<<EOD
-SELECT indextype,colnames FROM sys.sysindexes WHERE creator = :schema AND tname = :table
-EOD;
-            $constraints = $this->connection->select($sql, $params);
+        $columns = $this->connection->select($sql, $params);
+        foreach ($columns as $column) {
+            $column = array_change_key_case((array)$column, CASE_LOWER);
+            $c = new ColumnSchema(['name' => $column['cname']]);
+            $c->quotedName = $this->quoteColumnName($c->name);
+            $c->allowNull = $column['nulls'] == 'Y';
+            $c->isPrimaryKey = $column['in_primary_key'] == 'Y';
+            $c->dbType = $column['coltype'];
+            $c->scale = intval($column['syslength']);
+            $c->precision = $c->size = intval($column['length']);
+            $c->comment = $column['remarks'];
 
-            foreach ($constraints as $key => $constraint) {
-                $constraint = (array)$constraint;
-                $type = $constraint['indextype'];
-                $colnames = $constraint['colnames'];
-                $colnames = explode(',', $colnames);
-                foreach ($colnames as $key) {
-                    $key = strstr($key, ' ', true);
-                    foreach ($columns as &$column) {
-                        if ($key === array_get($column, 'cname')) {
-                            switch ($type) {
-                                case 'Primary Key':
-                                    $column['isPrimaryKey'] = true;
-                                    break;
-                                case 'Unique Constraint':
-                                    $column['isUnique'] = true;
-                                    break;
-                                case 'Non-unique':
-                                    $column['isIndex'] = true;
-                                    break;
-                            }
-                        }
+            $c->fixedLength = $this->extractFixedLength($c->dbType);
+            $c->supportsMultibyte = $this->extractMultiByteSupport($c->dbType);
+            $this->extractType($c, $c->dbType);
+            if (isset($column['default_value'])) {
+                $this->extractDefault($c, $column['default_value']);
+            }
+
+            switch ($c->dbType) {
+                case 'geometry':
+                case 'geography':
+                case 'hierarchyid':
+                    $c->dbFunction = [
+                        [
+                            'use'           => [DbFunctionUses::SELECT],
+                            'function'      => "({$c->quotedName}.ToString())",
+                            'function_type' => FunctionTypes::DATABASE
+                        ]
+                    ];
+                    break;
+            }
+
+            if ($c->isPrimaryKey) {
+                if ($c->autoIncrement) {
+                    $table->sequenceName = array_get($column, 'sequence', $c->name);
+                    if ((DbSimpleTypes::TYPE_INTEGER === $c->type)) {
+                        $c->type = DbSimpleTypes::TYPE_ID;
                     }
                 }
+                $table->addPrimaryKey($c->name);
             }
+            $table->addColumn($c);
         }
-
-        return $columns;
     }
 
     /**
-     * Creates a table column.
-     *
-     * @param array $column column metadata
-     *
-     * @return ColumnSchema normalized column metadata
+     * @inheritdoc
      */
-    protected function createColumn($column)
+    protected function getTableConstraints($schema = '')
     {
-        $c = new ColumnSchema(['name' => $column['cname']]);
-        $c->quotedName = $this->quoteColumnName($c->name);
-        $c->allowNull = $column['nulls'] == 'Y';
-        $c->isPrimaryKey = $column['in_primary_key'] == 'Y';
-        $c->dbType = $column['coltype'];
-        $c->scale = intval($column['syslength']);
-        $c->precision = $c->size = intval($column['length']);
-        $c->comment = $column['remarks'];
-
-        $c->fixedLength = $this->extractFixedLength($c->dbType);
-        $c->supportsMultibyte = $this->extractMultiByteSupport($c->dbType);
-        $this->extractType($c, $c->dbType);
-        if (isset($column['default_value'])) {
-            $this->extractDefault($c, $column['default_value']);
+        if (is_array($schema)) {
+            $schema = implode("','", $schema);
         }
 
-        switch ($c->dbType) {
-            case 'geometry':
-            case 'geography':
-            case 'hierarchyid':
-                $c->dbFunction = [
-                    [
-                        'use'           => [DbFunctionUses::SELECT],
-                        'function'      => "({$c->quotedName}.ToString())",
-                        'function_type' => FunctionTypes::DATABASE
-                    ]
-                ];
-                break;
+        $sql = <<<EOD
+SELECT icreator as constraint_schema, iname as constraint_name, creator as table_schema, tname as table_name,
+indextype as constraint_type, colnames as column_name
+FROM sys.sysindexes 
+WHERE creator IN ('{$schema}')
+EOD;
+        $result = $this->connection->select($sql);
+
+        foreach ($result as $row) {
+            $row = array_change_key_case((array)$row, CASE_LOWER);
+            $ts = strtolower($row['table_schema']);
+            $tn = strtolower($row['table_name']);
+            $cn = strtolower($row['constraint_name']);
+            $columns = explode(',', $row['column_name']);
+            foreach ($columns as &$key) {
+                $key = strstr($key, ' ', true);
+            }
+            $row['column_name'] = $columns;
+            switch ($row['constraint_type']) {
+                case 'Non-unique':
+                    $row['constraint_type'] = 'Index';
+                    break;
+            }
+            $constraints[$ts][$tn][$cn] = $row;
         }
 
-        return $c;
+        $sql = <<<EOD
+SELECT columns as column_nmae, foreign_creator AS 'table_schema', foreign_tname AS 'table_name', role as constraint_name,
+    primary_creator AS 'referenced_table_schema', primary_tname AS 'referenced_table_name'
+FROM SYS.SYSFOREIGNKEYS WHERE foreign_creator IN ('{$schema}')
+EOD;
+        $result = $this->connection->select($sql);
+        $constraints = [];
+        foreach ($result as $row) {
+            $row = array_change_key_case((array)$row, CASE_LOWER);
+            $ts = strtolower($row['table_schema']);
+            $tn = strtolower($row['table_name']);
+            $cn = strtolower($row['constraint_name']);
+            $columns = explode(',', $row['column_nmae']);
+            $colNames = [];
+            $refNames = [];
+            foreach ($columns as $ref) {
+                list($colNames[], $refNames[]) = explode(' IS ', $ref);
+            }
+            $row['column_name'] = $colNames;
+            $row['referenced_column_name'] = $refNames;
+            $row['constraint_type'] = 'Foreign Key';
+            $constraints[$ts][$tn][$cn] = $row;
+        }
+
+        return $constraints;
     }
 
-    protected function findSchemaNames()
+    public function getSchemas()
     {
         $sql = <<<MYSQL
 SELECT user_name FROM sysuser WHERE user_name NOT IN ('SYS','dbo','EXTENV_MAIN','EXTENV_WORKER') and user_type IN (12,13,14)
@@ -448,7 +458,7 @@ MYSQL;
     /**
      * @inheritdoc
      */
-    protected function findTableNames($schema = '')
+    protected function getTableNames($schema = '')
     {
         $condition = "tabletype = 'TABLE'";
         $params = [];
@@ -482,7 +492,7 @@ MYSQL;
     /**
      * @inheritdoc
      */
-    protected function findViewNames($schema = '')
+    protected function getViewNames($schema = '')
     {
         $condition = "tabletype IN ('VIEW','MAT VIEW')";
         $params = [];
@@ -517,7 +527,7 @@ MYSQL;
     /**
      * @inheritdoc
      */
-    protected function findRoutineNames($type, $schema = '')
+    protected function getRoutineNames($type, $schema = '')
     {
         $bindings = [];
         $where = '';

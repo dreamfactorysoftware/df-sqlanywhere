@@ -12,6 +12,7 @@ use DreamFactory\Core\Database\Schema\RoutineSchema;
 use DreamFactory\Core\Database\Schema\TableSchema;
 use DreamFactory\Core\Enums\DbSimpleTypes;
 use DreamFactory\Core\SqlDb\Database\Schema\SqlSchema;
+use \Illuminate\Support\Arr;
 
 /**
  * Schema is the class for retrieving metadata information from a MS SQL Server database.
@@ -373,7 +374,7 @@ MYSQL;
 
             if ($c->isPrimaryKey) {
                 if ($c->autoIncrement) {
-                    $table->sequenceName = array_get($column, 'sequence', $c->name);
+                    $table->sequenceName = Arr::get($column, 'sequence', $c->name);
                     if ((DbSimpleTypes::TYPE_INTEGER === $c->type)) {
                         $c->type = DbSimpleTypes::TYPE_ID;
                     }
@@ -585,7 +586,7 @@ MYSQL;
 
         foreach ($this->connection->select($sql) as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
-            $simpleType = static::extractSimpleType(array_get($row, 'parmdomain'));
+            $simpleType = static::extractSimpleType(Arr::get($row, 'parmdomain'));
             /*
             parmtype	SMALLINT	The type of parameter will be one of the following:
             0 - Normal parameter (variable)
@@ -594,19 +595,19 @@ MYSQL;
             3 - SQLCODE error value
             4 - Return value from function
              */
-            switch (intval(array_get($row, 'parmtype'))) {
+            switch (intval(Arr::get($row, 'parmtype'))) {
                 case 0:
                     $holder->addParameter(new ParameterSchema(
                         [
-                            'name'          => array_get($row, 'parmname'),
-                            'position'      => intval(array_get($row, 'parm_id')),
-                            'param_type'    => array_get($row, 'parmmode'),
+                            'name'          => Arr::get($row, 'parmname'),
+                            'position'      => intval(Arr::get($row, 'parm_id')),
+                            'param_type'    => Arr::get($row, 'parmmode'),
                             'type'          => $simpleType,
-                            'db_type'       => array_get($row, 'parmdomain'),
-                            'length'        => (isset($row['length']) ? intval(array_get($row, 'length')) : null),
-                            'precision'     => (isset($row['length']) ? intval(array_get($row, 'length')) : null),
-                            'scale'         => (isset($row['scale']) ? intval(array_get($row, 'scale')) : null),
-                            'default_value' => array_get($row, 'default'),
+                            'db_type'       => Arr::get($row, 'parmdomain'),
+                            'length'        => (isset($row['length']) ? intval(Arr::get($row, 'length')) : null),
+                            'precision'     => (isset($row['length']) ? intval(Arr::get($row, 'length')) : null),
+                            'scale'         => (isset($row['scale']) ? intval(Arr::get($row, 'scale')) : null),
+                            'default_value' => Arr::get($row, 'default'),
                         ]
                     ));
                     break;
@@ -767,7 +768,7 @@ MYSQL;
                 case 'IN':
                     $pName = ':' . $paramSchema->name;
                     $paramStr .= (empty($paramStr)) ? $pName : ", $pName";
-                    $bindings[$pName] = array_get($values, $key);
+                    $bindings[$pName] = Arr::get($values, $key);
                     break;
                 case 'INOUT':
 //                    $pName = $paramSchema->name;
@@ -799,7 +800,7 @@ MYSQL;
         foreach ($paramSchemas as $key => $paramSchema) {
             switch ($paramSchema->paramType) {
                 case 'IN':
-                    $this->bindValue($statement, ':' . $paramSchema->name, array_get($values, $key));
+                    $this->bindValue($statement, ':' . $paramSchema->name, Arr::get($values, $key));
                     break;
                 case 'INOUT':
                 case 'OUT':

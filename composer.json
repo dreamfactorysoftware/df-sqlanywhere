@@ -31,7 +31,7 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "require":     {
-    "dreamfactory/df-sqldb": "~1.0"
+    "dreamfactory/df-sqldb": "~1.1"
   },
   "autoload":    {
     "psr-4": {

@@ -2,7 +2,6 @@
 
 namespace DreamFactory\Core\SqlAnywhere\Database;
 
-use Doctrine\DBAL\Driver\PDOSqlsrv\Driver as DoctrineDriver;
 use DreamFactory\Core\SqlAnywhere\Database\Query\Grammars\SqlAnywhereGrammar as QueryGrammar;
 use DreamFactory\Core\SqlAnywhere\Database\Query\Processors\SqlAnywhereProcessor;
 use DreamFactory\Core\SqlAnywhere\Database\Schema\Grammars\SqlAnywhereGrammar as SchemaGrammar;
@@ -73,15 +72,5 @@ class SqlAnywhereConnection extends Connection
     protected function getDefaultPostProcessor()
     {
         return new SqlAnywhereProcessor;
-    }
-
-    /**
-     * Get the Doctrine DBAL driver.
-     *
-     * @return \Doctrine\DBAL\Driver\PDOSqlsrv\Driver
-     */
-    protected function getDoctrineDriver()
-    {
-        return new DoctrineDriver;
     }
 }

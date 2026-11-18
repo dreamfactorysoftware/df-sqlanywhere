@@ -390,17 +390,20 @@ MYSQL;
      */
     protected function getTableConstraints($schema = '')
     {
-        if (is_array($schema)) {
-            $schema = implode("','", $schema);
+        $schemas = is_array($schema) ? array_values($schema) : [$schema];
+        $schemas = array_values(array_filter($schemas, fn ($s) => $s !== '' && $s !== null));
+        if (empty($schemas)) {
+            return [];
         }
+        $placeholders = implode(',', array_fill(0, count($schemas), '?'));
 
         $sql = <<<EOD
 SELECT icreator as constraint_schema, iname as constraint_name, creator as table_schema, tname as table_name,
 indextype as constraint_type, colnames as column_name
-FROM sys.sysindexes 
-WHERE creator IN ('{$schema}')
+FROM sys.sysindexes
+WHERE creator IN ({$placeholders})
 EOD;
-        $result = $this->connection->select($sql);
+        $result = $this->connection->select($sql, $schemas);
 
         foreach ($result as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);
@@ -423,9 +426,9 @@ EOD;
         $sql = <<<EOD
 SELECT columns as column_nmae, foreign_creator AS 'table_schema', foreign_tname AS 'table_name', role as constraint_name,
     primary_creator AS 'referenced_table_schema', primary_tname AS 'referenced_table_name'
-FROM SYS.SYSFOREIGNKEYS WHERE foreign_creator IN ('{$schema}')
+FROM SYS.SYSFOREIGNKEYS WHERE foreign_creator IN ({$placeholders})
 EOD;
-        $result = $this->connection->select($sql);
+        $result = $this->connection->select($sql, $schemas);
         $constraints = [];
         foreach ($result as $row) {
             $row = array_change_key_case((array)$row, CASE_LOWER);

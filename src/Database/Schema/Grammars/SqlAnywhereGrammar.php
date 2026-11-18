@@ -25,9 +25,15 @@ class SqlAnywhereGrammar extends Grammar
     /**
      * Compile the query to determine if a table exists.
      *
+     * Laravel 13 widened the parent signature to (string|null $schema, string $table).
+     * The historical SQL Anywhere implementation only consults the table name via a
+     * positional binding, so $schema is accepted but unused.
+     *
+     * @param  string|null  $schema
+     * @param  string  $table
      * @return string
      */
-    public function compileTableExists()
+    public function compileTableExists($schema = null, $table = null)
     {
         return "select * from sysobjects where type = 'U' and name = ?";
     }

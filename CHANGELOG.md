@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.17.1] - 2026-11-18
+- The connector runs on Laravel 13 (grammar wiring and schema signatures).
+- Stability and reliability improvements.
+
 ## [0.15.1] - 2018-01-25 
 ### Added
 - DF-1275 Initial support for multi-column constraints
